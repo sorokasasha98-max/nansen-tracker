@@ -9,69 +9,99 @@ from google.oauth2.service_account import Credentials
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
-NANSEN_EMAIL    = os.environ.get("NANSEN_EMAIL", "")
-NANSEN_PASSWORD = os.environ.get("NANSEN_PASSWORD", "")
-SPREADSHEET_ID  = os.environ.get("SPREADSHEET_ID")
+NANSEN_EMAIL     = os.environ.get("NANSEN_EMAIL", "")
+NANSEN_PASSWORD  = os.environ.get("NANSEN_PASSWORD", "")
+SPREADSHEET_ID   = os.environ.get("SPREADSHEET_ID")
+PRIVY_APP_ID     = os.environ.get("PRIVY_APP_ID", "66eb5c3e-f6cf-44f1-b32c-7902c7c103a6")
 
 TOKENS = [
     {"symbol": "AKE", "address": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db", "chain": "bnb"},
 ]
 
 
-def get_token_via_playwright():
-    from playwright.sync_api import sync_playwright
+def login_privy():
+    # Шаг 1: инициируем логин через Privy
+    headers = {
+        "Content-Type": "application/json",
+        "privy-app-id": PRIVY_APP_ID,
+        "Origin": "https://app.nansen.ai",
+        "Referer": "https://app.nansen.ai/",
+    }
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage"]
-        )
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 720},
-        )
-        page = context.new_page()
+    # Инициируем OTP на email
+    r = requests.post(
+        "https://auth.privy.io/api/v1/passwordless/init",
+        headers=headers,
+        json={"email": NANSEN_EMAIL},
+        timeout=20
+    )
+    log.info(f"Privy init status: {r.status_code} {r.text[:200]}")
 
-        token_holder = {}
+    if r.status_code not in (200, 201):
+        # Попробуем логин через email+password
+        return login_privy_password(headers)
 
-        def handle_request(request):
-            auth = request.headers.get("authorization", "")
-            if auth.startswith("Bearer ") and "nansen.ai/api" in request.url:
-                token_holder["token"] = auth.replace("Bearer ", "")
+    raise Exception("Privy OTP flow not supported in automation - need password flow")
 
-        page.on("request", handle_request)
 
-        log.info("Going to token page...")
-        page.goto(
-            "https://app.nansen.ai/token-god-mode?tokenAddress=0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db&chain=bnb&tab=holders",
-            timeout=60000
-        )
-        page.wait_for_load_state("domcontentloaded", timeout=30000)
-        page.wait_for_timeout(5000)
-        log.info("URL: " + page.url)
+def login_privy_password(headers):
+    # Логин через email + password
+    r = requests.post(
+        "https://auth.privy.io/api/v1/siwe/init",
+        headers=headers,
+        json={
+            "email": NANSEN_EMAIL,
+            "password": NANSEN_PASSWORD,
+        },
+        timeout=20
+    )
+    log.info(f"Privy password init: {r.status_code} {r.text[:300]}")
 
-        # Если редиректнуло на логин — нужно логиниться
-        if "login" in page.url:
-            log.info("Redirected to login, need to authenticate...")
-            # Ждём загрузки Turnstile и формы
-            page.wait_for_timeout(8000)
-            inputs = page.query_selector_all('input')
-            log.info(f"Inputs on login page: {len(inputs)}")
-            for inp in inputs:
-                log.info(f"  type={inp.get_attribute('type')} name={inp.get_attribute('name')}")
-            raise Exception("Login required but Turnstile blocking - need different approach")
+    # Попробуем прямой логин
+    r2 = requests.post(
+        "https://auth.privy.io/api/v1/sessions",
+        headers=headers,
+        json={
+            "email": NANSEN_EMAIL,
+            "password": NANSEN_PASSWORD,
+        },
+        timeout=20
+    )
+    log.info(f"Privy sessions: {r2.status_code} {r2.text[:300]}")
 
-        log.info("Already on app, waiting for API calls...")
-        page.wait_for_timeout(10000)
-        log.info("Tokens captured: " + str(len(token_holder)))
+    if r2.status_code in (200, 201):
+        data = r2.json()
+        token = data.get("token") or data.get("access_token") or data.get("privy_access_token")
+        if token:
+            return get_nansen_token(token)
 
-        browser.close()
+    raise Exception(f"Privy login failed: {r2.text[:300]}")
 
-        if "token" not in token_holder:
-            raise Exception("Could not capture Bearer token")
 
-        log.info("Got Bearer token!")
-        return token_holder["token"]
+def get_nansen_token(privy_token):
+    # Обмениваем Privy токен на Nansen Bearer токен
+    headers = {
+        "Content-Type": "application/json",
+        "Origin": "https://app.nansen.ai",
+        "Referer": "https://app.nansen.ai/",
+        "Authorization": f"Bearer {privy_token}",
+    }
+    r = requests.post(
+        "https://app.nansen.ai/api/auth/login",
+        headers=headers,
+        json={"privyToken": privy_token},
+        timeout=20
+    )
+    log.info(f"Nansen auth: {r.status_code} {r.text[:300]}")
+
+    if r.status_code in (200, 201):
+        data = r.json()
+        log.info(f"Nansen auth response keys: {list(data.keys())}")
+        token = data.get("token") or data.get("accessToken") or data.get("idToken")
+        if token:
+            return token
+
+    raise Exception(f"Nansen login failed: {r.text[:300]}")
 
 
 def fetch_gini_stats(token, address, chain):
@@ -149,7 +179,7 @@ def ensure_headers(ws):
 
 def run():
     log.info("Starting...")
-    token = get_token_via_playwright()
+    token = login_privy()
     log.info("Got token successfully!")
 
     ws = get_sheet()
