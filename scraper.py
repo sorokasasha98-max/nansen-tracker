@@ -26,7 +26,7 @@ def fetch_token_info(address):
     payload = {
         "chain": "bnb",
         "token_address": address.lower(),
-        "timeframe": "24h"
+        "timeframe": "1d"
     }
     url = "https://api.nansen.ai/api/v1/tgm/token-information"
     r = requests.post(url, headers=headers, json=payload, timeout=20)
