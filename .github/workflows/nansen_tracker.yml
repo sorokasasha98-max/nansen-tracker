@@ -21,15 +21,13 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          playwright install chromium
-          playwright install-deps chromium
+        run: pip install -r requirements.txt
 
       - name: Run scraper
         env:
           NANSEN_EMAIL:            ${{ secrets.NANSEN_EMAIL }}
           NANSEN_PASSWORD:         ${{ secrets.NANSEN_PASSWORD }}
+          PRIVY_APP_ID:            ${{ secrets.PRIVY_APP_ID }}
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
           SPREADSHEET_ID:          ${{ secrets.SPREADSHEET_ID }}
         run: python scraper.py
