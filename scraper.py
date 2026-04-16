@@ -20,7 +20,6 @@ TOKENS = [
 
 def get_token_via_playwright():
     from playwright.sync_api import sync_playwright
-    from playwright_stealth import stealth_sync
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -35,9 +34,13 @@ def get_token_via_playwright():
             user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             viewport={"width": 1280, "height": 720},
             locale="en-US",
+            extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
         )
+        context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            window.chrome = {runtime: {}};
+        """)
         page = context.new_page()
-        stealth_sync(page)
 
         token_holder = {}
 
