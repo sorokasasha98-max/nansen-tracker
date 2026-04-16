@@ -24,22 +24,12 @@ def get_token_via_playwright():
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-            ]
+            args=["--no-sandbox", "--disable-dev-shm-usage"]
         )
         context = browser.new_context(
             user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             viewport={"width": 1280, "height": 720},
-            locale="en-US",
-            extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
         )
-        context.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-            window.chrome = {runtime: {}};
-        """)
         page = context.new_page()
 
         token_holder = {}
@@ -51,57 +41,28 @@ def get_token_via_playwright():
 
         page.on("request", handle_request)
 
-        log.info("Opening Nansen login page...")
-        page.goto("https://app.nansen.ai/login", timeout=60000)
-        page.wait_for_load_state("domcontentloaded", timeout=30000)
-        page.wait_for_timeout(10000)
-
-        log.info("URL: " + page.url)
-        log.info("Title: " + page.title())
-
-        # Диагностика - все inputs на странице
-        inputs = page.query_selector_all('input')
-        log.info(f"Found {len(inputs)} inputs on page")
-        for inp in inputs:
-            log.info(f"Input: type={inp.get_attribute('type')} name={inp.get_attribute('name')} placeholder={inp.get_attribute('placeholder')}")
-
-        # Диагностика - все кнопки
-        buttons = page.query_selector_all('button')
-        log.info(f"Found {len(buttons)} buttons on page")
-        for btn in buttons:
-            log.info(f"Button: text={btn.inner_text()[:50]}")
-
-        try:
-            page.wait_for_selector('input[type="email"]', timeout=30000)
-            page.fill('input[type="email"]', NANSEN_EMAIL)
-            log.info("Filled email")
-        except Exception as e:
-            log.error(f"Email input not found: {e}")
-            raise Exception(f"Email input not found: {e}")
-
-        try:
-            page.wait_for_selector('input[type="password"]', timeout=10000)
-            page.fill('input[type="password"]', NANSEN_PASSWORD)
-            log.info("Filled password")
-        except Exception as e:
-            raise Exception(f"Password input not found: {e}")
-
-        try:
-            page.click('button[type="submit"]', timeout=10000)
-            log.info("Clicked submit")
-        except Exception as e:
-            raise Exception(f"Submit button not found: {e}")
-
-        page.wait_for_load_state("domcontentloaded", timeout=30000)
-        page.wait_for_timeout(5000)
-        log.info("After login URL: " + page.url)
-
+        log.info("Going to token page...")
         page.goto(
-            "https://app.nansen.ai/token-god-mode?tokenAddress=0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db&chain=bnb",
+            "https://app.nansen.ai/token-god-mode?tokenAddress=0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db&chain=bnb&tab=holders",
             timeout=60000
         )
         page.wait_for_load_state("domcontentloaded", timeout=30000)
-        page.wait_for_timeout(8000)
+        page.wait_for_timeout(5000)
+        log.info("URL: " + page.url)
+
+        # Если редиректнуло на логин — нужно логиниться
+        if "login" in page.url:
+            log.info("Redirected to login, need to authenticate...")
+            # Ждём загрузки Turnstile и формы
+            page.wait_for_timeout(8000)
+            inputs = page.query_selector_all('input')
+            log.info(f"Inputs on login page: {len(inputs)}")
+            for inp in inputs:
+                log.info(f"  type={inp.get_attribute('type')} name={inp.get_attribute('name')}")
+            raise Exception("Login required but Turnstile blocking - need different approach")
+
+        log.info("Already on app, waiting for API calls...")
+        page.wait_for_timeout(10000)
         log.info("Tokens captured: " + str(len(token_holder)))
 
         browser.close()
