@@ -22,39 +22,96 @@ def get_token_via_playwright():
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+        )
         page = context.new_page()
-        
+
         token_holder = {}
-        
+
         def handle_request(request):
             auth = request.headers.get("authorization", "")
-            if auth.startswith("Bearer ") and "nansen" in request.url:
+            if auth.startswith("Bearer ") and "nansen.ai/api" in request.url:
                 token_holder["token"] = auth.replace("Bearer ", "")
-        
+
         page.on("request", handle_request)
-        
+
         log.info("Opening Nansen login page...")
-        page.goto("https://app.nansen.ai/login", wait_until="networkidle", timeout=60000)
-        
-        page.fill('input[type="email"]', NANSEN_EMAIL)
-        page.fill('input[type="password"]', NANSEN_PASSWORD)
-        page.click('button[type="submit"]')
-        
-        log.info("Waiting for login...")
-        page.wait_for_url("**/token-god-mode**", timeout=30000)
-        
-        # Navigate to trigger API calls
+        page.goto("https://app.nansen.ai/login", timeout=60000)
+        page.wait_for_load_state("networkidle", timeout=60000)
+
+        log.info("Page title: " + page.title())
+        log.info("Page URL: " + page.url)
+
+        email_selectors = [
+            'input[type="email"]',
+            'input[name="email"]',
+            'input[placeholder*="email" i]',
+            'input[autocomplete="email"]',
+        ]
+
+        email_input = None
+        for sel in email_selectors:
+            try:
+                page.wait_for_selector(sel, timeout=5000)
+                email_input = sel
+                log.info(f"Found email input: {sel}")
+                break
+            except Exception:
+                continue
+
+        if not email_input:
+            log.error("Email input not found! Page HTML:")
+            log.error(page.content()[:3000])
+            raise Exception("Email input not found on login page")
+
+        page.fill(email_input, NANSEN_EMAIL)
+        log.info("Filled email")
+
+        password_input = None
+        for sel in ['input[type="password"]', 'input[name="password"]']:
+            try:
+                page.wait_for_selector(sel, timeout=5000)
+                page.fill(sel, NANSEN_PASSWORD)
+                password_input = sel
+                log.info(f"Filled password: {sel}")
+                break
+            except Exception:
+                continue
+
+        if not password_input:
+            raise Exception("Password input not found")
+
+        for sel in [
+            'button[type="submit"]',
+            'button:has-text("Sign in")',
+            'button:has-text("Log in")',
+            'button:has-text("Continue")',
+            'button:has-text("Login")',
+        ]:
+            try:
+                page.click(sel, timeout=5000)
+                log.info(f"Clicked submit: {sel}")
+                break
+            except Exception:
+                continue
+
+        log.info("Waiting after login...")
+        page.wait_for_load_state("networkidle", timeout=60000)
+        log.info("After login URL: " + page.url)
+
         page.goto(
             "https://app.nansen.ai/token-god-mode?tokenAddress=0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db&chain=bnb",
-            wait_until="networkidle", timeout=60000
+            timeout=60000
         )
-        
+        page.wait_for_load_state("networkidle", timeout=60000)
+        log.info("Token page loaded, captured requests: " + str(len(token_holder)))
+
         browser.close()
-        
+
         if "token" not in token_holder:
             raise Exception("Could not capture Bearer token")
-        
+
         log.info("Got Bearer token!")
         return token_holder["token"]
 
