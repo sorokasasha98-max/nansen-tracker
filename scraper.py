@@ -1,5 +1,4 @@
 import os
-import re
 import json
 import logging
 import requests
@@ -38,7 +37,8 @@ def get_token_via_playwright():
 
         log.info("Opening Nansen login page...")
         page.goto("https://app.nansen.ai/login", timeout=60000)
-        page.wait_for_load_state("networkidle", timeout=60000)
+        page.wait_for_load_state("domcontentloaded", timeout=30000)
+        page.wait_for_timeout(4000)
 
         log.info("Page title: " + page.title())
         log.info("Page URL: " + page.url)
@@ -97,15 +97,17 @@ def get_token_via_playwright():
                 continue
 
         log.info("Waiting after login...")
-        page.wait_for_load_state("networkidle", timeout=60000)
+        page.wait_for_load_state("domcontentloaded", timeout=30000)
+        page.wait_for_timeout(5000)
         log.info("After login URL: " + page.url)
 
         page.goto(
             "https://app.nansen.ai/token-god-mode?tokenAddress=0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db&chain=bnb",
             timeout=60000
         )
-        page.wait_for_load_state("networkidle", timeout=60000)
-        log.info("Token page loaded, captured requests: " + str(len(token_holder)))
+        page.wait_for_load_state("domcontentloaded", timeout=30000)
+        page.wait_for_timeout(5000)
+        log.info("Token page loaded, tokens captured: " + str(len(token_holder)))
 
         browser.close()
 
