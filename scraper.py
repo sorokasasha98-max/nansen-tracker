@@ -19,7 +19,7 @@ TOKENS = [
 
 def fetch_gini_stats(address, chain):
     headers = {
-        "Authorization": f"Bearer {NANSEN_API_KEY}",
+        "Authorization": f"Bearer {NANSEN_BEARER_TOKEN}",
         "Content-Type": "application/json",
         "Origin": "https://app.nansen.ai",
         "Referer": "https://app.nansen.ai/token-god-mode",
