@@ -58,9 +58,18 @@ def get_token_via_playwright():
 
         log.info("URL: " + page.url)
         log.info("Title: " + page.title())
-        html = page.content()
-        log.info("HTML length: " + str(len(html)))
-        log.info("HTML snippet: " + html[:2000])
+
+        # Диагностика - все inputs на странице
+        inputs = page.query_selector_all('input')
+        log.info(f"Found {len(inputs)} inputs on page")
+        for inp in inputs:
+            log.info(f"Input: type={inp.get_attribute('type')} name={inp.get_attribute('name')} placeholder={inp.get_attribute('placeholder')}")
+
+        # Диагностика - все кнопки
+        buttons = page.query_selector_all('button')
+        log.info(f"Found {len(buttons)} buttons on page")
+        for btn in buttons:
+            log.info(f"Button: text={btn.inner_text()[:50]}")
 
         try:
             page.wait_for_selector('input[type="email"]', timeout=30000)
