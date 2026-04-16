@@ -9,7 +9,7 @@ from google.oauth2.service_account import Credentials
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
-NANSEN_API_KEY  = os.environ.get("NANSEN_API_KEY", "")
+NANSEN_BEARER_TOKEN = os.environ.get("NANSEN_BEARER_TOKEN", "")
 SPREADSHEET_ID  = os.environ.get("SPREADSHEET_ID")
 
 TOKENS = [
