@@ -54,7 +54,7 @@ def get_token_via_playwright():
         log.info("Opening Nansen login page...")
         page.goto("https://app.nansen.ai/login", timeout=60000)
         page.wait_for_load_state("domcontentloaded", timeout=30000)
-        page.wait_for_timeout(5000)
+        page.wait_for_timeout(10000)
 
         log.info("URL: " + page.url)
         log.info("Title: " + page.title())
@@ -63,7 +63,7 @@ def get_token_via_playwright():
         log.info("HTML snippet: " + html[:2000])
 
         try:
-            page.wait_for_selector('input[type="email"]', timeout=15000)
+            page.wait_for_selector('input[type="email"]', timeout=30000)
             page.fill('input[type="email"]', NANSEN_EMAIL)
             log.info("Filled email")
         except Exception as e:
