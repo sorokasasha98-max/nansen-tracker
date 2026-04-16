@@ -18,60 +18,45 @@ TOKENS = [
     {"symbol": "AKE", "address": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db", "chain": "bnb"},
 ]
 
-def get_firebase_api_key():
-    urls_to_try = [
-        "https://cdn.app.nansen.ai/assets/apiClient-DGL-WCU7.js",
-        "https://cdn.app.nansen.ai/assets/apiClient-Cm38F74S.js",
-    ]
-    for url in urls_to_try:
-        try:
-            r = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-            match = re.search(r'AIza[a-zA-Z0-9_\-]{35}', r.text)
-            if match:
-                log.info(f"Found Firebase key in {url}")
-                return match.group(0)
-        except Exception as e:
-            log.warning(f"Failed to fetch {url}: {e}")
-
-    # Fallback: ищем во всех скриптах index.html
-    try:
-        r = requests.get("https://app.nansen.ai/", timeout=15,
-                         headers={"User-Agent": "Mozilla/5.0"})
-        scripts = re.findall(r'src="(/assets/[^"]+\.js)"', r.text)
-        log.info(f"Found {len(scripts)} scripts in index.html")
-        for s in scripts[:20]:
-            try:
-                js = requests.get(
-                    f"https://cdn.app.nansen.ai{s}", timeout=10,
-                    headers={"User-Agent": "Mozilla/5.0"}
-                ).text
-                match = re.search(r'AIza[a-zA-Z0-9_\-]{35}', js)
-                if match:
-                    log.info(f"Found Firebase key in {s}")
-                    return match.group(0)
-            except Exception:
-                continue
-    except Exception as e:
-        log.warning(f"Failed to fetch index.html: {e}")
-
-    raise Exception("Firebase API key not found in any JS bundle")
-
-
-def login_nansen():
-    api_key = get_firebase_api_key()
-    log.info("Got Firebase API key")
-
-    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
-    payload = {
-        "email": NANSEN_EMAIL,
-        "password": NANSEN_PASSWORD,
-        "returnSecureToken": True,
-    }
-    r = requests.post(url, json=payload, timeout=20)
-    log.info(f"Login status: {r.status_code}")
-    if r.status_code != 200:
-        raise Exception(f"Login failed: {r.text[:300]}")
-    return r.json()["idToken"]
+def get_token_via_playwright():
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+        
+        token_holder = {}
+        
+        def handle_request(request):
+            auth = request.headers.get("authorization", "")
+            if auth.startswith("Bearer ") and "nansen" in request.url:
+                token_holder["token"] = auth.replace("Bearer ", "")
+        
+        page.on("request", handle_request)
+        
+        log.info("Opening Nansen login page...")
+        page.goto("https://app.nansen.ai/login", wait_until="networkidle", timeout=60000)
+        
+        page.fill('input[type="email"]', NANSEN_EMAIL)
+        page.fill('input[type="password"]', NANSEN_PASSWORD)
+        page.click('button[type="submit"]')
+        
+        log.info("Waiting for login...")
+        page.wait_for_url("**/token-god-mode**", timeout=30000)
+        
+        # Navigate to trigger API calls
+        page.goto(
+            "https://app.nansen.ai/token-god-mode?tokenAddress=0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db&chain=bnb",
+            wait_until="networkidle", timeout=60000
+        )
+        
+        browser.close()
+        
+        if "token" not in token_holder:
+            raise Exception("Could not capture Bearer token")
+        
+        log.info("Got Bearer token!")
+        return token_holder["token"]
 
 
 def fetch_gini_stats(token, address, chain):
@@ -116,7 +101,7 @@ def parse_data(raw):
         return v
 
     return {
-        "holders":   int(holders) if isinstance(holders, (int, float)) else holders,
+        "holders":    int(holders) if isinstance(holders, (int, float)) else holders,
         "top100_pct": fmt(top100),
         "fresh_pct":  fmt(fresh),
     }
@@ -149,8 +134,8 @@ def ensure_headers(ws):
 
 def run():
     log.info("Starting...")
-    token = login_nansen()
-    log.info("Logged in successfully!")
+    token = get_token_via_playwright()
+    log.info("Got token successfully!")
 
     ws = get_sheet()
     ensure_headers(ws)
