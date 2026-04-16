@@ -11,8 +11,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger(__name__)
 
 TOKENS = [
-    {"symbol": "IRYS", "address": "0x50f41F589aFACa2EF41FDF590FE7b90cD26DEe64"},
-    {"symbol": "AKE",  "address": "0x2c3a8Ee94dDD97244a93Bc48298f97d2C412F7Db"},
+    {"symbol": "IRYS", "address": "0x91152b4ef635403efbae860edd0f8c321d7c035d"},
+    {"symbol": "AKE",  "address": "0x2c3a8ee94ddd97244a93bc48298f97d2c412f7db"},
 ]
 
 NANSEN_API_KEY = os.environ.get("NANSEN_API_KEY", "")
@@ -23,13 +23,10 @@ def fetch_token_info(address):
         "Content-Type": "application/json",
         "apiKey": NANSEN_API_KEY,
     }
-    from datetime import date, timedelta
-    today = date.today().isoformat()
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
     payload = {
-        "chain": "ethereum",
+        "chain": "bnb",
         "token_address": address.lower(),
-        "date": {"from": yesterday, "to": today}
+        "timeframe": "24h"
     }
     url = "https://api.nansen.ai/api/v1/tgm/token-information"
     r = requests.post(url, headers=headers, json=payload, timeout=20)
@@ -37,30 +34,6 @@ def fetch_token_info(address):
     if r.status_code == 200:
         return r.json()
     log.warning("Response: " + r.text[:300])
-    return None
-
-def fetch_holders(address):
-    headers = {
-        "Content-Type": "application/json",
-        "apiKey": NANSEN_API_KEY,
-    }
-    from datetime import date, timedelta
-    today = date.today().isoformat()
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
-    payload = {
-        "chain": "ethereum",
-        "token_address": address.lower(),
-        "label_type": "all_holders",
-        "aggregate_by_entity": False,
-        "date": {"from": yesterday, "to": today},
-        "pagination": {"page": 1, "per_page": 1}
-    }
-    url = "https://api.nansen.ai/api/v1/tgm/holders"
-    r = requests.post(url, headers=headers, json=payload, timeout=20)
-    log.info("tgm/holders status: " + str(r.status_code))
-    if r.status_code == 200:
-        return r.json()
-    log.warning("Holders response: " + r.text[:300])
     return None
 
 def parse_token_info(raw):
