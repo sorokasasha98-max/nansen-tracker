@@ -25,9 +25,7 @@ jobs:
 
       - name: Run scraper
         env:
-          NANSEN_EMAIL:            ${{ secrets.NANSEN_EMAIL }}
-          NANSEN_PASSWORD:         ${{ secrets.NANSEN_PASSWORD }}
-          PRIVY_APP_ID:            ${{ secrets.PRIVY_APP_ID }}
+          NANSEN_API_KEY:          ${{ secrets.NANSEN_API_KEY }}
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
           SPREADSHEET_ID:          ${{ secrets.SPREADSHEET_ID }}
         run: python scraper.py
