@@ -32,7 +32,6 @@ def fetch_nansen_data(address):
             return r.json()
     except Exception as e:
         log.warning("holder-stats failed: " + str(e))
-
     try:
         url = "https://api.nansen.ai/api/v1/token-god-mode/token/summary"
         payload = {"chain": "ethereum", "token_address": addr}
@@ -42,32 +41,20 @@ def fetch_nansen_data(address):
             return r.json()
     except Exception as e:
         log.warning("token-summary failed: " + str(e))
-
-    try:
-        url = "https://api.nansen.ai/api/v1/token/" + addr
-        r = requests.get(url, headers=headers, timeout=20)
-        log.info("token endpoint status: " + str(r.status_code))
-        if r.status_code == 200:
-            return r.json()
-    except Exception as e:
-        log.warning("token endpoint failed: " + str(e))
-
     return None
 
 def parse_fields(raw):
     if not raw:
         return {"holders": "N/A", "top100_pct": "N/A", "fresh_wallets_pct": "N/A"}
-    log.info("Raw data keys: " + str(list(raw.keys()) if isinstance(raw, dict) else "not a dict"))
+    log.info("Raw keys: " + str(list(raw.keys()) if isinstance(raw, dict) else "not dict"))
     holders = (raw.get("holderCount") or raw.get("holders") or
-               raw.get("total_holders") or raw.get("numHolders") or
-               raw.get("holder_count") or "N/A")
+               raw.get("total_holders") or raw.get("holder_count") or "N/A")
     top100 = (raw.get("top100HoldersPct") or raw.get("supplyHeldByTop100") or
-              raw.get("topHoldersPct") or raw.get("top_100_pct") or
-              raw.get("top100_supply_pct") or "N/A")
+              raw.get("topHoldersPct") or raw.get("top_100_pct") or "N/A")
     fresh = (raw.get("freshWalletsPct") or raw.get("supplyHeldByFreshWallets") or
-             raw.get("fresh_wallets_pct") or raw.get("freshWallets") or "N/A")
+             raw.get("fresh_wallets_pct") or "N/A")
     def fmt(v):
-        if isinstance(v, (int, float)) and v < 100:
+        if isinstance(v, (int, float)) and v <= 100:
             return str(round(v, 2)) + "%"
         if isinstance(v, (int, float)):
             return int(v)
@@ -100,7 +87,7 @@ def ensure_headers(ws):
         ws.insert_row(headers, 1)
 
 def run():
-    log.info("Starting Nansen data collection...")
+    log.info("Starting...")
     ws = get_sheet()
     ensure_headers(ws)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -108,7 +95,7 @@ def run():
     for token in TOKENS:
         symbol = token["symbol"]
         address = token["address"]
-        log.info("Fetching " + symbol + "...")
+        log.info("Fetching " + symbol)
         try:
             raw = fetch_nansen_data(address)
             fields = parse_fields(raw)
