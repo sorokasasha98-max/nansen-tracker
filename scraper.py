@@ -58,13 +58,16 @@ def get_token_via_playwright():
 
         log.info("URL: " + page.url)
         log.info("Title: " + page.title())
+        html = page.content()
+        log.info("HTML length: " + str(len(html)))
+        log.info("HTML snippet: " + html[:2000])
 
         try:
             page.wait_for_selector('input[type="email"]', timeout=15000)
             page.fill('input[type="email"]', NANSEN_EMAIL)
             log.info("Filled email")
         except Exception as e:
-            log.error("Page HTML: " + page.content()[:2000])
+            log.error(f"Email input not found: {e}")
             raise Exception(f"Email input not found: {e}")
 
         try:
